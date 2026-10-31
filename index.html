@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mening shajaram</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #243047; }
+    header { background: #315c4b; color: white; text-align: center; padding: 24px 12px; }
+    main { max-width: 900px; margin: 24px auto; padding: 0 14px; }
+    section { background: white; border-radius: 14px; padding: 18px; margin-bottom: 18px; box-shadow: 0 3px 14px #0000000c; }
+    h2 { margin-top: 0; }
+    label { display: block; margin: 12px 0 6px; }
+    input, select, button { width: 100%; padding: 11px; border: 1px solid #ccd4dc; border-radius: 8px; font-size: 16px; }
+    button { background: #315c4b; color: white; border: 0; cursor: pointer; margin-top: 14px; }
+    .tree { display: flex; flex-direction: column; align-items: center; gap: 12px; overflow-x: auto; padding: 10px 0; }
+    .person { background: #eaf4ee; border: 2px solid #8eb7a0; border-radius: 12px; padding: 12px 18px; min-width: 190px; text-align: center; }
+    .person strong { display: block; }
+    .person small { color: #53665b; }
+    .children { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; width: 100%; }
+    .empty { color: #697586; text-align: center; }
+    .person button { background: #a94444; padding: 7px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🌳 Mening shajaram</h1>
+    <p>Oilamiz tarixi va avlodlarimiz</p>
+  </header>
+  <main>
+    <section>
+      <h2>Oila a’zosini qo‘shish</h2>
+      <form id="personForm">
+        <label for="name">Ismi</label>
+        <input id="name" required placeholder="Masalan: Ali">
+        <label for="relation">Qarindoshligi</label>
+        <input id="relation" required placeholder="Masalan: Bobom, Onam, Men">
+        <label for="parent">Kimning farzandi?</label>
+        <select id="parent">
+          <option value="">Yuqori avlod / ota-onasi kiritilmagan</option>
+        </select>
+        <button type="submit">A’zoni qo‘shish</button>
+      </form>
+    </section>
+    <section>
+      <h2>Shajara</h2>
+      <div id="tree" class="tree">
+        <p class="empty">Hozircha shajara bo‘sh. Birinchi oila a’zosini qo‘shing.</p>
+      </div>
+    </section>
+  </main>
+  <script>
+    const STORAGE_KEY = "mening-shajaram";
+    let people = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const form = document.getElementById("personForm");
+    const nameInput = document.getElementById("name");
+    const relationInput = document.getElementById("relation");
+    const parentSelect = document.getElementById("parent");
+    const tree = document.getElementById("tree");
+
+    function savePeople() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(people));
+    }
+
+    function updateParentOptions() {
+      parentSelect.innerHTML =
+        '<option value="">Yuqori avlod / ota-onasi kiritilmagan</option>';
+      people.forEach(person => {
+        const option = document.createElement("option");
+        option.value = person.id;
+        option.textContent = person.name + " — " + person.relation;
+        parentSelect.appendChild(option);
+      });
+    }
+
+    function renderTree() {
+      tree.innerHTML = "";
+      if (people.length === 0) {
+        tree.innerHTML =
+          '<p class="empty">Hozircha shajara bo‘sh. Birinchi oila a’zosini qo‘shing.</p>';
+        return;
+      }
+      const childrenOf = id => people.filter(person => person.parentId === id);
+
+      function makePerson(person) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "person";
+        const name = document.createElement("strong");
+        name.textContent = person.name;
+        const relation = document.createElement("small");
+        relation.textContent = person.relation;
+        const remove = document.createElement("button");
+        remove.textContent = "O‘chirish";
+        remove.type = "button";
+        remove.addEventListener("click", () => deletePerson(person.id));
+        wrapper.append(name, relation, remove);
+        return wrapper;
+      }
+
+      function makeBranch(person) {
+        const branch = document.createElement("div");
+        branch.style.display = "flex";
+        branch.style.flexDirection = "column";
+        branch.style.alignItems = "center";
+        branch.style.gap = "12px";
+        branch.appendChild(makePerson(person));
+        const children = childrenOf(person.id);
+        if (children.length) {
+          const childRow = document.createElement("div");
+          childRow.className = "children";
+          children.forEach(child => childRow.appendChild(makeBranch(child)));
+          branch.appendChild(childRow);
+        }
+        return branch;
+      }
+
+      const roots = people.filter(person =>
+        !person.parentId || !people.some(p => p.id === person.parentId)
+      );
+      roots.forEach(root => tree.appendChild(makeBranch(root)));
+    }
+
+    function deletePerson(id) {
+      const idsToDelete = new Set([id]);
+      function addDescendants(parentId) {
+        people.filter(person => person.parentId === parentId).forEach(child => {
+          idsToDelete.add(child.id);
+          addDescendants(child.id);
+        });
+      }
+      addDescendants(id);
+      people = people.filter(person => !idsToDelete.has(person.id));
+      savePeople();
+      updateParentOptions();
+      renderTree();
+    }
+
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      const name = nameInput.value.trim();
+      const relation = relationInput.value.trim();
+      const parentId = parentSelect.value;
+      if (!name || !relation) return;
+      people.push({ id: Date.now().toString(), name, relation, parentId });
+      savePeople();
+      updateParentOptions();
+      renderTree();
+      form.reset();
+    });
+
+    updateParentOptions();
+    renderTree();
+  </script>
+</body>
+</html>
